@@ -74,11 +74,15 @@ class PricingTierResource extends Resource
                         fn (CustomerType $t) => [$t->value => $t->label()]
                     )),
             ])
-            ->actions([EditAction::make()])
+            ->actions([
+                EditAction::make()
+                    ->label('Edit / Price List'),
+            ])
+            ->recordUrl(fn ($record) => static::getUrl('edit', ['record' => $record]))
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             PriceListItemsRelationManager::class,

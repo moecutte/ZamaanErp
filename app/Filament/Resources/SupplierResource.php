@@ -25,8 +25,8 @@ class SupplierResource extends Resource
 
     protected static ?string $model = Supplier::class;
     protected static ?string $navigationIcon = 'heroicon-o-truck';
-    protected static ?string $navigationGroup = 'Inventory';
-    protected static ?int $navigationSort = 3;
+    protected static ?string $navigationGroup = 'Purchasing';
+    protected static ?int $navigationSort = 2;
 
     public static function allowedRoles(): array
     {

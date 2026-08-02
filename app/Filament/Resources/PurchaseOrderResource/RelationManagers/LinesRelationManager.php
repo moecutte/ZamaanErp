@@ -31,7 +31,7 @@ class LinesRelationManager extends RelationManager
 
             TextInput::make('unit_cost')
                 ->numeric()
-                ->prefix('$')
+                ->suffix(' ' . \App\Support\Money::label())
                 ->required()
                 ->minValue(0),
         ])->columns(2);
@@ -44,7 +44,7 @@ class LinesRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('product.name')->label('Product'),
                 TextColumn::make('quantity')->numeric(decimalPlaces: 3),
-                TextColumn::make('unit_cost')->money('USD'),
+                TextColumn::make('unit_cost')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
                 TextColumn::make('batch.batch_code')
                     ->label('Batch')
                     ->placeholder('Not received yet')

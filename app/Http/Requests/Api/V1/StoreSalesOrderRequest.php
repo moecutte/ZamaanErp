@@ -24,6 +24,7 @@ class StoreSalesOrderRequest extends FormRequest
             'confirm' => ['nullable', 'boolean'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
+            'lines.*.product_form_id' => ['nullable', 'exists:product_forms,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0.001'],
         ];
     }

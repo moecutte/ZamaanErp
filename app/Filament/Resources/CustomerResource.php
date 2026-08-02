@@ -73,7 +73,7 @@ class CustomerResource extends Resource
 
             TextInput::make('credit_limit')
                 ->numeric()
-                ->prefix('$')
+                ->suffix(' ' . \App\Support\Money::label())
                 ->minValue(0)
                 ->nullable()
                 ->visible(fn (Get $get) => in_array($get('type'), [
@@ -115,7 +115,7 @@ class CustomerResource extends Resource
                     ->placeholder('—'),
                 TextColumn::make('contact_phone')->label('Phone')->toggleable(),
                 TextColumn::make('credit_limit')
-                    ->money('USD')
+                    ->formatStateUsing(fn ($state) => \App\Support\Money::format($state))
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('payment_terms_days')
@@ -128,11 +128,15 @@ class CustomerResource extends Resource
                         fn (CustomerType $t) => [$t->value => $t->label()]
                     )),
             ])
-            ->actions([EditAction::make()])
+            ->actions([
+                EditAction::make()
+                    ->label('Edit / Overrides'),
+            ])
+            ->recordUrl(fn ($record) => static::getUrl('edit', ['record' => $record]))
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             PriceOverridesRelationManager::class,

@@ -31,6 +31,8 @@ class StockMovementsRelationManager extends RelationManager
                         'danger'  => StockMovementType::SaleOut->value,
                         'warning' => StockMovementType::WastageOut->value,
                         'info'    => StockMovementType::Adjustment->value,
+                        'primary' => StockMovementType::ProcessingIn->value,
+                        'gray'    => StockMovementType::ProcessingOut->value,
                     ]),
                 TextColumn::make('quantity')
                     ->numeric(decimalPlaces: 3),

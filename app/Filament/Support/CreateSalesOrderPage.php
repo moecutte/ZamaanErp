@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Pages;
+namespace App\Filament\Support;
 
 use App\Enums\CustomerType;
 use App\Enums\SalesChannel;
@@ -8,6 +8,7 @@ use App\Enums\SalesOrderStatus;
 use App\Filament\Concerns\HasRoleAccess;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductForm;
 use App\Models\SalesOrder;
 use App\Services\ConfirmSalesOrderService;
 use App\Services\PricingResolutionService;
@@ -117,7 +118,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
                             }
 
                             $limit = $customer->credit_limit !== null
-                                ? '$' . number_format((float) $customer->credit_limit, 2)
+                                ? \App\Support\Money::format($customer->credit_limit)
                                 : 'No limit set';
                             $days = $customer->payment_terms_days;
 
@@ -139,8 +140,33 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
                             ->searchable()
                             ->required()
                             ->live()
-                            ->afterStateUpdated(fn (Get $get, Set $set) => $this->repriceLine($get, $set))
+                            ->afterStateUpdated(function (Get $get, Set $set) {
+                                $set('product_form_id', null);
+                                $product = Product::find($get('product_id'));
+                                if ($product) {
+                                    $set('product_form_id', $product->baseForm()?->id);
+                                }
+                                $this->repriceLine($get, $set);
+                            })
                             ->columnSpan(2),
+
+                        Select::make('product_form_id')
+                            ->label('Form')
+                            ->options(function (Get $get) {
+                                $productId = $get('product_id');
+                                if (! $productId) {
+                                    return [];
+                                }
+
+                                return ProductForm::query()
+                                    ->where('product_id', $productId)
+                                    ->where('is_active', true)
+                                    ->orderBy('sort_order')
+                                    ->pluck('name', 'id');
+                            })
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(fn (Get $get, Set $set) => $this->repriceLine($get, $set)),
 
                         TextInput::make('quantity')
                             ->numeric()
@@ -152,7 +178,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
 
                         TextInput::make('unit_price')
                             ->numeric()
-                            ->prefix('$')
+                            ->suffix(' ' . \App\Support\Money::label())
                             ->required()
                             ->minValue(0)
                             ->live(onBlur: true)
@@ -160,7 +186,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
 
                         TextInput::make('subtotal')
                             ->numeric()
-                            ->prefix('$')
+                            ->suffix(' ' . \App\Support\Money::label())
                             ->readOnly(),
                     ])
                     ->columns(2)
@@ -175,6 +201,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
     {
         $customerId = $this->data['customer_id'] ?? null;
         $productId = $get('product_id');
+        $formId = $get('product_form_id');
         $qty = (float) ($get('quantity') ?? 0);
 
         if (! $customerId || ! $productId) {
@@ -188,7 +215,12 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
             return;
         }
 
-        $price = app(PricingResolutionService::class)->resolve($customer, $product, $qty);
+        $price = app(PricingResolutionService::class)->resolve(
+            $customer,
+            $product,
+            $qty,
+            $formId ? (int) $formId : null,
+        );
 
         if ($price !== null) {
             $set('unit_price', $price);
@@ -221,6 +253,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
 
         foreach ($this->data['lines'] as $i => $line) {
             $productId = $line['product_id'] ?? null;
+            $formId = $line['product_form_id'] ?? null;
             $qty = (float) ($line['quantity'] ?? 0);
             if (! $productId || $qty <= 0) {
                 continue;
@@ -231,7 +264,12 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
                 continue;
             }
 
-            $price = $pricing->resolve($customer, $product, $qty);
+            $price = $pricing->resolve(
+                $customer,
+                $product,
+                $qty,
+                $formId ? (int) $formId : null,
+            );
             if ($price !== null) {
                 $this->data['lines'][$i]['unit_price'] = $price;
                 $this->data['lines'][$i]['subtotal'] = round($price * $qty, 2);
@@ -263,6 +301,7 @@ abstract class CreateSalesOrderPage extends Page implements HasForms
 
                     $order->lines()->create([
                         'product_id' => $line['product_id'],
+                        'product_form_id' => $line['product_form_id'],
                         'batch_id'   => null,
                         'quantity'   => $qty,
                         'unit_price' => $price,

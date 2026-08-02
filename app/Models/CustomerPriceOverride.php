@@ -13,6 +13,7 @@ class CustomerPriceOverride extends Model
     protected $fillable = [
         'customer_id',
         'product_id',
+        'product_form_id',
         'price_per_unit',
     ];
 
@@ -31,5 +32,10 @@ class CustomerPriceOverride extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productForm(): BelongsTo
+    {
+        return $this->belongsTo(ProductForm::class);
     }
 }

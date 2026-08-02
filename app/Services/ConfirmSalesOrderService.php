@@ -24,18 +24,27 @@ class ConfirmSalesOrderService
 
     public function confirm(SalesOrder $order, ?PaymentMethod $retailPaymentMethod = PaymentMethod::Cash): SalesOrder
     {
-        if ($order->status !== SalesOrderStatus::Draft) {
-            throw new \RuntimeException(
-                "Only draft orders can be confirmed (current status: {$order->status->value})."
-            );
-        }
-
         if ($order->lines()->count() === 0) {
             throw new \RuntimeException('Cannot confirm an order with no lines.');
         }
 
         return DB::transaction(function () use ($order, $retailPaymentMethod) {
-            $order->load(['lines.product', 'customer']);
+            $order = SalesOrder::query()
+                ->whereKey($order->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($order->status !== SalesOrderStatus::Draft) {
+                throw new \RuntimeException(
+                    "Only draft orders can be confirmed (current status: {$order->status->value})."
+                );
+            }
+
+            $order->load(['lines.product', 'lines.productForm', 'customer']);
+
+            if ($order->lines->isEmpty()) {
+                throw new \RuntimeException('Cannot confirm an order with no lines.');
+            }
 
             $this->assertCreditLimit($order);
 
@@ -47,7 +56,21 @@ class ConfirmSalesOrderService
                     );
                 }
 
-                $allocations = $this->allocator->allocate($line->product, (float) $line->quantity);
+                if ($line->product_form_id === null) {
+                    $baseForm = $line->product->baseForm();
+                    if ($baseForm === null) {
+                        throw new \RuntimeException(
+                            'Order line #' . $line->id . ' has no product form and product has no base form.'
+                        );
+                    }
+                    $line->product_form_id = $baseForm->id;
+                }
+
+                $allocations = $this->allocator->allocate(
+                    $line->product,
+                    (float) $line->quantity,
+                    $line->product_form_id,
+                );
 
                 $line->delete();
 
@@ -56,12 +79,13 @@ class ConfirmSalesOrderService
                     $qty = (float) $allocation->quantity_to_deduct;
 
                     SalesOrderLine::create([
-                        'sales_order_id' => $order->id,
-                        'product_id'     => $line->product_id,
-                        'batch_id'       => $allocation->batch->id,
-                        'quantity'       => $qty,
-                        'unit_price'     => $unitPrice,
-                        'subtotal'       => round($qty * $unitPrice, 2),
+                        'sales_order_id'   => $order->id,
+                        'product_id'       => $line->product_id,
+                        'product_form_id'  => $line->product_form_id ?? $allocation->batch->product_form_id,
+                        'batch_id'         => $allocation->batch->id,
+                        'quantity'         => $qty,
+                        'unit_price'       => $unitPrice,
+                        'subtotal'         => round($qty * $unitPrice, 2),
                     ]);
 
                     $this->stockService->recordSaleOut(
@@ -103,6 +127,9 @@ class ConfirmSalesOrderService
         if ($customer->credit_limit === null) {
             return;
         }
+
+        // Serialize credit checks for this customer within the confirm transaction
+        DB::table('customers')->where('id', $customer->id)->lockForUpdate()->first();
 
         $orderTotal = round((float) $order->lines->sum('subtotal'), 2);
         $outstanding = $this->invoiceService->outstandingBalance($customer);

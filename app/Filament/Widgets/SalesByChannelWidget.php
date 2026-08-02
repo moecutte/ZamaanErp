@@ -8,9 +8,16 @@ use Filament\Widgets\ChartWidget;
 
 class SalesByChannelWidget extends ChartWidget
 {
-    protected static ?string $heading = 'Sales by Channel (30 days)';
-    protected static ?int $sort = 10;
-    protected int|string|array $columnSpan = 1;
+    protected static bool $isDiscovered = false;
+
+    protected static ?string $heading = 'Sales by channel (30 days)';
+    protected static ?int $sort = 2;
+    protected int|string|array $columnSpan = [
+        'md' => 2,
+        'xl' => 2,
+    ];
+
+    protected static bool $isLazy = true;
 
     protected function getData(): array
     {
@@ -30,7 +37,7 @@ class SalesByChannelWidget extends ChartWidget
                 [
                     'label' => 'Revenue ($)',
                     'data' => $data,
-                    'backgroundColor' => ['#3b82f6', '#f59e0b', '#10b981'],
+                    'backgroundColor' => ['#0d9488', '#0284c7'],
                 ],
             ],
             'labels' => $labels,

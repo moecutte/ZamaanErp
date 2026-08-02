@@ -53,12 +53,38 @@ class ReceivePurchaseOrderService
             }
 
             foreach ($purchaseOrder->lines()->with('product')->get() as $line) {
-                $details = $lineDetails[$line->id] ?? [];
+                $details = $lineDetails[$line->id] ?? $lineDetails[(string) $line->id] ?? null;
+
+                if ($details === null) {
+                    throw new \InvalidArgumentException(
+                        "Missing batch details for PO line #{$line->id} ({$line->product->name})."
+                    );
+                }
+
+                if (empty($details['expiry_date'])) {
+                    throw new \InvalidArgumentException(
+                        "Expiry date is required for \"{$line->product->name}\"."
+                    );
+                }
+
+                if (empty($details['storage_location'])) {
+                    throw new \InvalidArgumentException(
+                        "Storage location is required for \"{$line->product->name}\"."
+                    );
+                }
+
+                $baseFormId = $line->product->baseForm()?->id;
+                if ($baseFormId === null) {
+                    throw new \RuntimeException(
+                        "Product \"{$line->product->name}\" has no base form configured."
+                    );
+                }
 
                 // Create with quantity_available = 0; StockService::recordIn
                 // will increment it and log the movement atomically.
                 $batch = Batch::create([
                     'product_id'         => $line->product_id,
+                    'product_form_id'    => $baseFormId,
                     'supplier_id'        => $purchaseOrder->supplier_id,
                     'catch_date'         => $details['catch_date'] ?? null,
                     'production_date'    => $details['production_date'] ?? null,

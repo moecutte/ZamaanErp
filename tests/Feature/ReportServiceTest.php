@@ -131,4 +131,28 @@ class ReportServiceTest extends TestCase
 
         $this->assertTrue($rows->contains(fn ($r) => $r->customer_type === CustomerType::Retailer->value));
     }
+
+    public function test_dashboard_report_uses_product_not_fish_type(): void
+    {
+        $order = SalesOrder::first();
+        \App\Models\Invoice::create([
+            'sales_order_id' => $order->id,
+            'invoice_number' => 'INV-TEST-001',
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(7)->toDateString(),
+            'total_amount' => 160,
+            'amount_paid' => 60,
+            'status' => \App\Enums\InvoiceStatus::Partial,
+        ]);
+
+        $report = $this->service->dashboardReport();
+
+        $this->assertEquals(160.0, $report['total_sales']);
+        $this->assertEquals(100.0, $report['outstanding_debt']);
+        $this->assertEquals(60.0, $report['total_collection']);
+        $this->assertEquals(20.0, $report['total_kg_sold']);
+        $this->assertEquals('Tuna', $report['product_kg']->first()->product);
+        $this->assertTrue($report['form_kg']->isNotEmpty());
+        $this->assertEquals($this->user->name, $report['salesperson_kg']->first()->salesperson);
+    }
 }

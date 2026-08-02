@@ -11,9 +11,11 @@ use Illuminate\Support\Carbon;
 
 class ExpiringBatchesWidget extends BaseWidget
 {
-    protected static ?string $heading = '⚠ Batches Expiring Within 3 Days';
+    protected static ?string $heading = 'Expiring ≤ 3 days';
     protected static ?int $sort = 2;
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 1;
+
+    protected static bool $isLazy = true;
 
     public function table(Table $table): Table
     {
@@ -22,28 +24,27 @@ class ExpiringBatchesWidget extends BaseWidget
                 Batch::query()
                     ->with(['product', 'supplier'])
                     ->where('quantity_available', '>', 0)
-                    ->where('expiry_date', '<=', Carbon::now()->addDays(3))
+                    ->whereDate('expiry_date', '>=', Carbon::now()->toDateString())
+                    ->whereDate('expiry_date', '<=', Carbon::now()->addDays(3)->toDateString())
                     ->orderBy('expiry_date', 'asc')
             )
             ->columns([
                 TextColumn::make('batch_code')
-                    ->searchable(),
+                    ->label('Batch')
+                    ->searchable()
+                    ->limit(14),
                 TextColumn::make('product.name')
-                    ->label('Product'),
+                    ->label('Product')
+                    ->limit(16),
                 TextColumn::make('expiry_date')
                     ->date()
                     ->sortable()
                     ->color(fn (Batch $record) => $record->expiry_date->isPast() ? 'danger' : 'warning'),
                 TextColumn::make('quantity_available')
-                    ->numeric(decimalPlaces: 3)
-                    ->label('Qty Available'),
-                TextColumn::make('storage_location')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state->label()),
-                TextColumn::make('supplier.name')
-                    ->label('Supplier')
-                    ->toggleable(),
+                    ->numeric(decimalPlaces: 1)
+                    ->label('Qty'),
             ])
-            ->paginated(false);
+            ->paginated([5])
+            ->defaultPaginationPageOption(5);
     }
 }

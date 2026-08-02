@@ -44,11 +44,16 @@ class SalesOrderController extends Controller
                 foreach ($data['lines'] as $line) {
                     $product = Product::findOrFail($line['product_id']);
                     $qty = (float) $line['quantity'];
+                    $formId = isset($line['product_form_id'])
+                        ? (int) $line['product_form_id']
+                        : $product->baseForm()?->id;
+
                     // Always resolve server-side — never trust client unit_price
-                    $unitPrice = $this->pricing->resolveOrFail($customer, $product, $qty);
+                    $unitPrice = $this->pricing->resolveOrFail($customer, $product, $qty, $formId);
 
                     $order->lines()->create([
                         'product_id' => $product->id,
+                        'product_form_id' => $formId,
                         'batch_id'   => null,
                         'quantity'   => $qty,
                         'unit_price' => $unitPrice,
@@ -60,7 +65,7 @@ class SalesOrderController extends Controller
                     $order = $this->confirmService->confirm($order);
                 }
 
-                return $order->fresh(['lines.product', 'lines.batch', 'customer', 'invoice']);
+                return $order->fresh(['lines.product', 'lines.productForm', 'lines.batch', 'customer', 'invoice']);
             });
 
             return (new SalesOrderResource($order))

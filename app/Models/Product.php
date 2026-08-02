@@ -18,6 +18,11 @@ class Product extends Model
         'unit_type',
         'sku',
         'description',
+        'image',
+    ];
+
+    protected $appends = [
+        'image_url',
     ];
 
     protected function casts(): array
@@ -27,9 +32,28 @@ class Product extends Model
         ];
     }
 
+    public function getImageUrlAttribute(): ?string
+    {
+        if (! $this->image) {
+            return null;
+        }
+
+        return asset('storage/' . ltrim($this->image, '/'));
+    }
+
     public function batches(): HasMany
     {
         return $this->hasMany(Batch::class);
+    }
+
+    public function forms(): HasMany
+    {
+        return $this->hasMany(ProductForm::class);
+    }
+
+    public function baseForm(): ?ProductForm
+    {
+        return $this->forms()->where('is_base', true)->first();
     }
 
     public function priceListItems(): HasMany
@@ -50,5 +74,10 @@ class Product extends Model
     public function purchaseOrderLines(): HasMany
     {
         return $this->hasMany(PurchaseOrderLine::class);
+    }
+
+    public function processings(): HasMany
+    {
+        return $this->hasMany(ProductProcessing::class);
     }
 }

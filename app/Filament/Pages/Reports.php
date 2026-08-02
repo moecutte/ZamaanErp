@@ -9,10 +9,10 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Illuminate\Http\Response;
 
 class Reports extends Page implements HasForms
 {
@@ -22,7 +22,7 @@ class Reports extends Page implements HasForms
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'Reports';
     protected static ?string $navigationGroup = 'Reports';
-    protected static ?string $title = 'Export Reports';
+    protected static ?string $title = 'Reports';
     protected static ?int $navigationSort = 1;
     protected static string $view = 'filament.pages.reports';
     protected static ?string $slug = 'reports';
@@ -32,16 +32,46 @@ class Reports extends Page implements HasForms
         return ['admin', 'sales_staff'];
     }
 
+    public string $category = ReportExportService::CATEGORY_SALES;
+
     public ?array $data = [];
+
+    /** @var array{title: string, headers: list<string>, rows: list<list<mixed>>}|null */
+    public ?array $preview = null;
 
     public function mount(): void
     {
+        $export = app(ReportExportService::class);
+
         $this->form->fill([
-            'report' => 'sales_by_channel',
+            'report' => $export->defaultReportForCategory($this->category),
             'format' => 'csv',
             'from'   => now()->subDays(30)->toDateString(),
             'to'     => now()->toDateString(),
         ]);
+
+        $this->loadPreview();
+    }
+
+    public function setCategory(string $category): void
+    {
+        $export = app(ReportExportService::class);
+        $allowed = array_keys($export->reportsForCategory($category));
+
+        if ($allowed === []) {
+            return;
+        }
+
+        $this->category = $category;
+        $this->data['report'] = $export->defaultReportForCategory($category);
+        $this->form->fill([
+            'report' => $this->data['report'],
+            'format' => $this->data['format'] ?? 'csv',
+            'from' => $this->data['from'] ?? now()->subDays(30)->toDateString(),
+            'to' => $this->data['to'] ?? now()->toDateString(),
+        ]);
+
+        $this->loadPreview();
     }
 
     public function form(Form $form): Form
@@ -49,14 +79,11 @@ class Reports extends Page implements HasForms
         return $form
             ->schema([
                 Select::make('report')
-                    ->options([
-                        'sales_by_channel'         => 'Sales by Channel',
-                        'top_products'             => 'Top Products',
-                        'stock_aging'              => 'Stock Aging',
-                        'wastage'                  => 'Wastage %',
-                        'revenue_by_customer_type' => 'Revenue by Customer Type',
-                    ])
-                    ->required(),
+                    ->label('Report')
+                    ->options(fn () => app(ReportExportService::class)->reportsForCategory($this->category))
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn () => $this->loadPreview()),
 
                 Select::make('format')
                     ->options([
@@ -65,23 +92,104 @@ class Reports extends Page implements HasForms
                     ])
                     ->required(),
 
-                DatePicker::make('from')->required(),
-                DatePicker::make('to')->required(),
+                DatePicker::make('from')
+                    ->native(true)
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn () => $this->loadPreview()),
+
+                DatePicker::make('to')
+                    ->native(true)
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn () => $this->loadPreview()),
             ])
             ->columns(2)
             ->statePath('data');
     }
 
-    public function export(): StreamedResponse|Response|null
+    /**
+     * @return array<string, array{label: string, reports: array<string, string>}>
+     */
+    public function getCategoryTreeProperty(): array
+    {
+        $export = app(ReportExportService::class);
+
+        return [
+            ReportExportService::CATEGORY_SALES => [
+                'label' => 'Sales report',
+                'reports' => $export->reportsForCategory(ReportExportService::CATEGORY_SALES),
+            ],
+            ReportExportService::CATEGORY_PAYMENTS => [
+                'label' => 'Payment & debt report',
+                'reports' => $export->reportsForCategory(ReportExportService::CATEGORY_PAYMENTS),
+            ],
+            ReportExportService::CATEGORY_WASTAGE => [
+                'label' => 'Wastage report',
+                'reports' => $export->reportsForCategory(ReportExportService::CATEGORY_WASTAGE),
+            ],
+        ];
+    }
+
+    public function selectSubReport(string $report): void
+    {
+        $allowed = array_keys(app(ReportExportService::class)->reportsForCategory($this->category));
+
+        if (! in_array($report, $allowed, true)) {
+            return;
+        }
+
+        $this->data['report'] = $report;
+        $this->form->fill($this->data);
+        $this->loadPreview();
+    }
+
+    public function loadPreview(): void
+    {
+        try {
+            $data = $this->form->getRawState();
+
+            if (empty($data['report']) || empty($data['from']) || empty($data['to'])) {
+                $this->preview = null;
+
+                return;
+            }
+
+            $from = Carbon::parse($data['from'])->startOfDay();
+            $to = Carbon::parse($data['to'])->endOfDay();
+
+            if ($from->gt($to)) {
+                [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+            }
+
+            $this->preview = app(ReportExportService::class)->build(
+                report: $data['report'],
+                from: $from,
+                to: $to,
+            );
+        } catch (\Throwable $e) {
+            $this->preview = null;
+
+            Notification::make()
+                ->title('Could not load preview')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function export(): ?StreamedResponse
     {
         $data = $this->form->getState();
 
         try {
+            $this->loadPreview();
+
             return app(ReportExportService::class)->export(
                 report: $data['report'],
                 format: $data['format'],
-                from: \Illuminate\Support\Carbon::parse($data['from']),
-                to: \Illuminate\Support\Carbon::parse($data['to']),
+                from: Carbon::parse($data['from']),
+                to: Carbon::parse($data['to']),
             );
         } catch (\Throwable $e) {
             Notification::make()

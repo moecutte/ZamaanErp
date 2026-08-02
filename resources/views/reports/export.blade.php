@@ -14,7 +14,7 @@
 </head>
 <body>
     <h1>{{ $title }}</h1>
-    <div class="meta">Period: {{ $from->toDateString() }} → {{ $to->toDateString() }}</div>
+    <div class="meta">Period: {{ $from->toDateString() }} - {{ $to->toDateString() }}</div>
     <table>
         <thead>
             <tr>

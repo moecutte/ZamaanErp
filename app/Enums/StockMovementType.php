@@ -8,6 +8,8 @@ enum StockMovementType: string
     case SaleOut = 'sale_out';
     case WastageOut = 'wastage_out';
     case Adjustment = 'adjustment';
+    case ProcessingOut = 'processing_out';
+    case ProcessingIn = 'processing_in';
 
     public function label(): string
     {
@@ -16,6 +18,8 @@ enum StockMovementType: string
             self::SaleOut => 'Sale Out',
             self::WastageOut => 'Wastage Out',
             self::Adjustment => 'Adjustment',
+            self::ProcessingOut => 'Processing Out',
+            self::ProcessingIn => 'Processing In',
         };
     }
 }

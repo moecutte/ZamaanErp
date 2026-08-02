@@ -6,6 +6,7 @@ use App\Enums\UnitType;
 use App\Filament\Concerns\HasRoleAccess;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Models\Product;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -59,6 +61,16 @@ class ProductResource extends Resource
             Textarea::make('description')
                 ->rows(3)
                 ->columnSpanFull(),
+
+            FileUpload::make('image')
+                ->label('Product image')
+                ->image()
+                ->disk('public')
+                ->directory('products')
+                ->visibility('public')
+                ->imageEditor()
+                ->maxSize(4096)
+                ->columnSpanFull(),
         ])->columns(2);
     }
 
@@ -66,6 +78,11 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
+                ImageColumn::make('image')
+                    ->label('')
+                    ->disk('public')
+                    ->circular()
+                    ->defaultImageUrl(url('/images/zamaan-logo-dark.png')),
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('sku')->searchable()->sortable()->copyable(),
                 TextColumn::make('species')->toggleable(),
@@ -86,6 +103,13 @@ class ProductResource extends Resource
             ])
             ->actions([EditAction::make()])
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            \App\Filament\Resources\ProductResource\RelationManagers\FormsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

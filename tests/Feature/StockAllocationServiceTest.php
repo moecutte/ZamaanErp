@@ -122,6 +122,38 @@ class StockAllocationServiceTest extends TestCase
         $this->assertEquals(25.0, $available);
     }
 
+    public function test_allocates_only_requested_form(): void
+    {
+        $fillet = \App\Models\ProductForm::create([
+            'product_id' => $this->product->id,
+            'name' => 'Fillet',
+            'code' => 'fillet',
+            'is_base' => false,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $wholeBatch = $this->makeBatch(20, '2026-08-01');
+        $filletBatch = Batch::create([
+            'product_id' => $this->product->id,
+            'product_form_id' => $fillet->id,
+            'supplier_id' => $this->supplier->id,
+            'expiry_date' => '2026-08-01',
+            'quantity_received' => 5,
+            'quantity_available' => 5,
+            'storage_location' => StorageLocation::Frozen,
+            'unit_cost' => 5.00,
+        ]);
+
+        $allocations = $this->service->allocate($this->product, 3, $fillet);
+
+        $this->assertCount(1, $allocations);
+        $this->assertEquals($filletBatch->id, $allocations->first()->batch->id);
+        $this->assertEquals(20.0, $this->service->availableQuantity($this->product));
+        $this->assertEquals(5.0, $this->service->availableQuantity($this->product, $fillet));
+        $this->assertEquals($wholeBatch->id, $this->service->allocate($this->product, 1)->first()->batch->id);
+    }
+
     public function test_skips_expired_batches(): void
     {
         $this->makeBatch(50, now()->subDay()->toDateString());

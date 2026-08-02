@@ -42,8 +42,8 @@ class InvoiceResource extends Resource
             TextInput::make('sales_order_id')->label('Sales Order #')->disabled(),
             DatePicker::make('issue_date')->disabled(),
             DatePicker::make('due_date')->disabled(),
-            TextInput::make('total_amount')->prefix('$')->disabled(),
-            TextInput::make('amount_paid')->prefix('$')->disabled(),
+            TextInput::make('total_amount')->suffix(' ' . \App\Support\Money::label())->disabled(),
+            TextInput::make('amount_paid')->suffix(' ' . \App\Support\Money::label())->disabled(),
             Select::make('status')
                 ->options(collect(InvoiceStatus::cases())->mapWithKeys(
                     fn (InvoiceStatus $s) => [$s->value => $s->label()]
@@ -64,8 +64,8 @@ class InvoiceResource extends Resource
                     ->formatStateUsing(fn ($state) => $state->label()),
                 TextColumn::make('issue_date')->date()->sortable(),
                 TextColumn::make('due_date')->date()->sortable(),
-                TextColumn::make('total_amount')->money('USD')->sortable(),
-                TextColumn::make('amount_paid')->money('USD'),
+                TextColumn::make('total_amount')->formatStateUsing(fn ($state) => \App\Support\Money::format($state))->sortable(),
+                TextColumn::make('amount_paid')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (InvoiceStatus $state) => $state->label())
@@ -74,6 +74,7 @@ class InvoiceResource extends Resource
                         InvoiceStatus::Partial => 'info',
                         InvoiceStatus::Paid    => 'success',
                         InvoiceStatus::Overdue => 'danger',
+                        InvoiceStatus::Cancelled => 'gray',
                     }),
             ])
             ->defaultSort('id', 'desc')
@@ -91,12 +92,12 @@ class InvoiceResource extends Resource
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
                     ->visible(fn (Invoice $record) =>
-                        ! in_array($record->status, [InvoiceStatus::Paid], true)
+                        ! in_array($record->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled], true)
                     )
                     ->form([
                         TextInput::make('amount')
                             ->numeric()
-                            ->prefix('$')
+                            ->suffix(' ' . \App\Support\Money::label())
                             ->required()
                             ->minValue(0.01)
                             ->default(fn (Invoice $record) =>
@@ -135,7 +136,7 @@ class InvoiceResource extends Resource
             ]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             PaymentsRelationManager::class,

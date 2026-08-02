@@ -8,6 +8,7 @@ use App\Enums\SalesChannel;
 use App\Enums\SalesOrderStatus;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductForm;
 use App\Models\SalesOrder;
 use App\Services\ConfirmSalesOrderService;
 use App\Services\PricingResolutionService;
@@ -23,9 +24,11 @@ class PosTerminal extends Component
 
     public string $search = '';
 
+    public string $category = 'all';
+
     public string $paymentMethod = 'cash';
 
-    /** @var array<string, array{product_id: int, name: string, sku: string, unit: string, quantity: float, unit_price: float, subtotal: float}> */
+    /** @var array<string, array{product_id: int, product_form_id: int, name: string, sku: string, form: string, unit: string, quantity: float, unit_price: float, subtotal: float}> */
     public array $cart = [];
 
     public ?string $toast = null;
@@ -63,13 +66,32 @@ class PosTerminal extends Component
             ->all();
     }
 
+    public function getCategoriesProperty(): Collection
+    {
+        return Product::query()
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+    }
+
+    public function setCategory(string $category): void
+    {
+        $this->category = $category;
+    }
+
     public function getProductsProperty(): Collection
     {
         $allocator = app(StockAllocationService::class);
         $pricing = app(PricingResolutionService::class);
         $customer = $this->customerId ? Customer::find($this->customerId) : null;
 
-        $query = Product::query()->orderBy('name');
+        $query = Product::query()->with(['forms' => fn ($q) => $q->where('is_active', true)])->orderBy('name');
+
+        if ($this->category !== 'all') {
+            $query->where('category', $this->category);
+        }
 
         if (trim($this->search) !== '') {
             $term = '%' . trim($this->search) . '%';
@@ -80,22 +102,37 @@ class PosTerminal extends Component
             });
         }
 
-        return $query->limit(80)->get()->map(function (Product $product) use ($allocator, $pricing, $customer) {
-            $available = $allocator->availableQuantity($product);
-            $price = $customer
-                ? $pricing->resolve($customer, $product, 1)
-                : null;
+        return $query->limit(40)->get()->flatMap(function (Product $product) use ($allocator, $pricing, $customer) {
+            $forms = $product->forms;
+            if ($forms->isEmpty()) {
+                return collect();
+            }
 
-            return (object) [
-                'id' => $product->id,
-                'name' => $product->name,
-                'sku' => $product->sku,
-                'unit' => $product->unit_type?->label() ?? '',
-                'available' => $available,
-                'price' => $price,
-                'in_stock' => $available > 0,
-            ];
-        });
+            return $forms->map(function (ProductForm $form) use ($product, $forms, $allocator, $pricing, $customer) {
+                $available = $allocator->availableQuantity($product, $form);
+                $price = $customer
+                    ? $pricing->resolve($customer, $product, 1, $form)
+                    : null;
+
+                $label = $forms->count() > 1
+                    ? "{$product->name} · {$form->name}"
+                    : $product->name;
+
+                return (object) [
+                    'id' => $product->id,
+                    'form_id' => $form->id,
+                    'name' => $label,
+                    'sku' => $product->sku,
+                    'form' => $form->name,
+                    'category' => $product->category,
+                    'image_url' => $product->image_url,
+                    'unit' => $product->unit_type?->label() ?? '',
+                    'available' => $available,
+                    'price' => $price,
+                    'in_stock' => $available > 0,
+                ];
+            });
+        })->values();
     }
 
     public function getCartTotalProperty(): float
@@ -113,22 +150,27 @@ class PosTerminal extends Component
         $this->repriceCart();
     }
 
-    public function addToCart(int $productId): void
+    public function addToCart(int $productId, int $formId): void
     {
         $this->toast = null;
         $product = Product::find($productId);
-        if (! $product) {
+        $form = ProductForm::query()
+            ->whereKey($formId)
+            ->where('product_id', $productId)
+            ->first();
+
+        if (! $product || ! $form) {
             return;
         }
 
-        $available = app(StockAllocationService::class)->availableQuantity($product);
+        $available = app(StockAllocationService::class)->availableQuantity($product, $form);
         if ($available <= 0) {
             $this->flash('Out of stock', 'error');
 
             return;
         }
 
-        $key = (string) $productId;
+        $key = $this->cartKey($productId, $formId);
 
         if (isset($this->cart[$key])) {
             $newQty = round((float) $this->cart[$key]['quantity'] + 1, 3);
@@ -145,19 +187,21 @@ class PosTerminal extends Component
 
         $customer = Customer::find($this->customerId);
         $price = $customer
-            ? app(PricingResolutionService::class)->resolve($customer, $product, 1)
+            ? app(PricingResolutionService::class)->resolve($customer, $product, 1, $form)
             : null;
 
         if ($price === null) {
-            $this->flash("No price configured for {$product->name}.", 'error');
+            $this->flash("No price configured for {$product->name} ({$form->name}).", 'error');
 
             return;
         }
 
         $this->cart[$key] = [
             'product_id' => $product->id,
-            'name' => $product->name,
+            'product_form_id' => $form->id,
+            'name' => $product->name . ' · ' . $form->name,
             'sku' => $product->sku,
+            'form' => $form->name,
             'unit' => $product->unit_type?->label() ?? '',
             'quantity' => 1.0,
             'unit_price' => $price,
@@ -172,8 +216,9 @@ class PosTerminal extends Component
         }
 
         $product = Product::find($this->cart[$key]['product_id']);
+        $formId = (int) $this->cart[$key]['product_form_id'];
         $available = $product
-            ? app(StockAllocationService::class)->availableQuantity($product)
+            ? app(StockAllocationService::class)->availableQuantity($product, $formId)
             : 0;
 
         $newQty = round((float) $this->cart[$key]['quantity'] + 1, 3);
@@ -216,8 +261,9 @@ class PosTerminal extends Component
         }
 
         $product = Product::find($this->cart[$key]['product_id']);
+        $formId = (int) $this->cart[$key]['product_form_id'];
         $available = $product
-            ? app(StockAllocationService::class)->availableQuantity($product)
+            ? app(StockAllocationService::class)->availableQuantity($product, $formId)
             : 0;
 
         if ($qty > $available) {
@@ -242,6 +288,11 @@ class PosTerminal extends Component
     {
         $this->toast = null;
 
+        abort_unless(
+            Auth::user()?->hasAnyRole(['admin', 'sales_staff']),
+            403
+        );
+
         if (! $this->customerId) {
             $this->flash('Select a customer', 'error');
 
@@ -256,10 +307,20 @@ class PosTerminal extends Component
 
         try {
             $method = PaymentMethod::from($this->paymentMethod);
+            $pricing = app(PricingResolutionService::class);
 
-            $order = DB::transaction(function () use ($method) {
+            $order = DB::transaction(function () use ($method, $pricing) {
+                $customer = Customer::query()
+                    ->whereKey($this->customerId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($customer->type !== CustomerType::Household) {
+                    throw new \RuntimeException('POS only allows household customers.');
+                }
+
                 $order = SalesOrder::create([
-                    'customer_id' => $this->customerId,
+                    'customer_id' => $customer->id,
                     'channel' => SalesChannel::Pos,
                     'order_date' => now()->toDateString(),
                     'status' => SalesOrderStatus::Draft,
@@ -268,11 +329,19 @@ class PosTerminal extends Component
                 ]);
 
                 foreach ($this->cart as $line) {
+                    $product = Product::findOrFail($line['product_id']);
+                    $formId = (int) $line['product_form_id'];
                     $qty = (float) $line['quantity'];
-                    $price = (float) $line['unit_price'];
+
+                    if ($qty <= 0) {
+                        throw new \InvalidArgumentException('Cart quantity must be greater than zero.');
+                    }
+
+                    $price = $pricing->resolveOrFail($customer, $product, $qty, $formId);
 
                     $order->lines()->create([
-                        'product_id' => $line['product_id'],
+                        'product_id' => $product->id,
+                        'product_form_id' => $formId,
                         'batch_id' => null,
                         'quantity' => $qty,
                         'unit_price' => $price,
@@ -299,6 +368,11 @@ class PosTerminal extends Component
             ]);
     }
 
+    private function cartKey(int $productId, int $formId): string
+    {
+        return "{$productId}:{$formId}";
+    }
+
     private function flash(string $message, string $type): void
     {
         $this->toast = $message;
@@ -309,10 +383,11 @@ class PosTerminal extends Component
     {
         $customer = Customer::find($this->customerId);
         $product = Product::find($this->cart[$key]['product_id']);
+        $formId = (int) $this->cart[$key]['product_form_id'];
 
         $price = (float) $this->cart[$key]['unit_price'];
         if ($customer && $product) {
-            $resolved = app(PricingResolutionService::class)->resolve($customer, $product, $qty);
+            $resolved = app(PricingResolutionService::class)->resolve($customer, $product, $qty, $formId);
             if ($resolved !== null) {
                 $price = $resolved;
             }

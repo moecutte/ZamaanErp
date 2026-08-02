@@ -10,6 +10,7 @@ use App\Filament\Resources\PurchaseOrderResource\RelationManagers\LinesRelationM
 use App\Models\PurchaseOrder;
 use App\Services\ReceivePurchaseOrderService;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -67,7 +68,7 @@ class PurchaseOrderResource extends Resource
 
             TextInput::make('total_cost')
                 ->numeric()
-                ->prefix('$')
+                ->suffix(' ' . \App\Support\Money::label())
                 ->default(0)
                 ->readOnly(),
 
@@ -95,7 +96,7 @@ class PurchaseOrderResource extends Resource
 
                     TextInput::make('unit_cost')
                         ->numeric()
-                        ->prefix('$')
+                        ->suffix(' ' . \App\Support\Money::label())
                         ->required()
                         ->minValue(0)
                         ->live()
@@ -130,7 +131,7 @@ class PurchaseOrderResource extends Resource
                         PurchaseOrderStatus::Received  => 'success',
                         PurchaseOrderStatus::Cancelled => 'danger',
                     }),
-                TextColumn::make('total_cost')->money('USD')->sortable(),
+                TextColumn::make('total_cost')->formatStateUsing(fn ($state) => \App\Support\Money::format($state))->sortable(),
                 TextColumn::make('lines_count')->counts('lines')->label('Lines'),
             ])
             ->defaultSort('id', 'desc')
@@ -154,6 +155,8 @@ class PurchaseOrderResource extends Resource
                         $record->status === PurchaseOrderStatus::Pending
                     )
                     ->mountUsing(function (\Filament\Forms\ComponentContainer $form, PurchaseOrder $record) {
+                        $record->loadMissing('lines.product');
+
                         // Pre-fill one entry per PO line so the user can enter batch details
                         $form->fill([
                             'line_details' => $record->lines->map(fn ($line) => [
@@ -164,20 +167,22 @@ class PurchaseOrderResource extends Resource
                                 'catch_date'       => null,
                                 'production_date'  => null,
                                 'storage_location' => StorageLocation::Frozen->value,
-                            ])->toArray(),
+                            ])->values()->all(),
                         ]);
                     })
                     ->form([
                         Repeater::make('line_details')
                             ->label('Batch details per line')
                             ->schema([
-                                TextInput::make('line_id')->hidden(),
+                                Hidden::make('line_id')->required(),
                                 TextInput::make('product_name')
                                     ->label('Product')
-                                    ->readOnly(),
+                                    ->disabled()
+                                    ->dehydrated(),
                                 TextInput::make('quantity')
                                     ->numeric()
-                                    ->readOnly(),
+                                    ->disabled()
+                                    ->dehydrated(),
                                 DatePicker::make('expiry_date')
                                     ->required(),
                                 DatePicker::make('catch_date'),
@@ -195,9 +200,16 @@ class PurchaseOrderResource extends Resource
                     ])
                     ->action(function (PurchaseOrder $record, array $data): void {
                         try {
-                            $lineDetails = collect($data['line_details'])
-                                ->keyBy('line_id')
-                                ->toArray();
+                            $lineDetails = [];
+                            foreach ($data['line_details'] ?? [] as $row) {
+                                $lineId = (int) ($row['line_id'] ?? 0);
+                                if ($lineId <= 0) {
+                                    throw new \RuntimeException(
+                                        'Receive form is missing line IDs. Close and open Receive PO again.'
+                                    );
+                                }
+                                $lineDetails[$lineId] = $row;
+                            }
 
                             app(ReceivePurchaseOrderService::class)->receive(
                                 purchaseOrder: $record,
@@ -235,7 +247,7 @@ class PurchaseOrderResource extends Resource
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             LinesRelationManager::class,
