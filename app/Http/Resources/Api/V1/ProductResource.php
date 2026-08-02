@@ -18,6 +18,13 @@ class ProductResource extends JsonResource
             'unit_type' => $this->unit_type?->value,
             'unit_type_label' => $this->unit_type?->label(),
             'description' => $this->description,
+            'forms' => $this->whenLoaded('forms', fn () => $this->forms->map(fn ($form) => [
+                'id' => $form->id,
+                'name' => $form->name,
+                'code' => $form->code,
+                'is_base' => (bool) $form->is_base,
+                'is_active' => (bool) $form->is_active,
+            ])),
         ];
     }
 }

@@ -32,6 +32,16 @@ class Product extends Model
         return $this->hasMany(Batch::class);
     }
 
+    public function forms(): HasMany
+    {
+        return $this->hasMany(ProductForm::class);
+    }
+
+    public function baseForm(): ?ProductForm
+    {
+        return $this->forms()->where('is_base', true)->first();
+    }
+
     public function priceListItems(): HasMany
     {
         return $this->hasMany(PriceListItem::class);
@@ -50,5 +60,10 @@ class Product extends Model
     public function purchaseOrderLines(): HasMany
     {
         return $this->hasMany(PurchaseOrderLine::class);
+    }
+
+    public function processings(): HasMany
+    {
+        return $this->hasMany(ProductProcessing::class);
     }
 }

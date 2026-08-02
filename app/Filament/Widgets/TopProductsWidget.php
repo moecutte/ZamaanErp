@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 
 class TopProductsWidget extends BaseWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected static ?string $heading = 'Top Products (30 days)';
     protected static ?int $sort = 13;
     protected int|string|array $columnSpan = 'full';
@@ -52,7 +54,7 @@ class TopProductsWidget extends BaseWidget
                     ->numeric(decimalPlaces: 3),
                 TextColumn::make('revenue')
                     ->label('Revenue')
-                    ->money('USD'),
+                    ->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
             ])
             ->paginated(false);
     }

@@ -38,7 +38,7 @@ class SalesOrderResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
     protected static ?string $navigationGroup = 'Sales';
     protected static ?string $navigationLabel = 'All Orders';
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     public static function allowedRoles(): array
     {
@@ -128,7 +128,7 @@ class SalesOrderResource extends Resource
                             ->placeholder('—'),
                         TextEntry::make('invoice.total_amount')
                             ->label('Invoice total')
-                            ->money('USD')
+                            ->formatStateUsing(fn ($state) => \App\Support\Money::format($state))
                             ->placeholder('—'),
                     ]),
 
@@ -142,13 +142,13 @@ class SalesOrderResource extends Resource
                                 TextEntry::make('product.sku')->label('SKU'),
                                 TextEntry::make('batch.batch_code')->label('Batch')->placeholder('—'),
                                 TextEntry::make('quantity')->label('Qty')->numeric(decimalPlaces: 3),
-                                TextEntry::make('unit_price')->label('Unit price')->money('USD'),
-                                TextEntry::make('subtotal')->label('Subtotal')->money('USD'),
+                                TextEntry::make('unit_price')->label('Unit price')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
+                                TextEntry::make('subtotal')->label('Subtotal')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
                             ]),
                         TextEntry::make('lines_total')
                             ->label('Order total')
                             ->state(fn (SalesOrder $record) => round((float) $record->lines->sum('subtotal'), 2))
-                            ->money('USD')
+                            ->formatStateUsing(fn ($state) => \App\Support\Money::format($state))
                             ->weight('bold'),
                     ]),
             ]);

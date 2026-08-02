@@ -13,6 +13,7 @@ class PriceListItem extends Model
     protected $fillable = [
         'pricing_tier_id',
         'product_id',
+        'product_form_id',
         'price_per_unit',
         'min_quantity',
     ];
@@ -33,5 +34,10 @@ class PriceListItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productForm(): BelongsTo
+    {
+        return $this->belongsTo(ProductForm::class);
     }
 }

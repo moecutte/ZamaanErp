@@ -114,6 +114,81 @@ class CancelSalesOrderServiceTest extends TestCase
 
         $this->assertEquals(SalesOrderStatus::Cancelled, $confirmed->fresh()->status);
         $this->assertEquals(100.0, (float) $this->batch->fresh()->quantity_available);
+        $this->assertEquals(InvoiceStatus::Cancelled, $confirmed->fresh()->invoice->status);
+    }
+
+    public function test_cannot_pay_cancelled_invoice(): void
+    {
+        $restaurant = Customer::create([
+            'name' => 'Grill',
+            'type' => CustomerType::Restaurant,
+            'payment_terms_days' => 15,
+            'credit_limit' => 5000,
+        ]);
+
+        $order = SalesOrder::create([
+            'customer_id' => $restaurant->id,
+            'channel' => SalesChannel::SalesOrder,
+            'order_date' => now()->toDateString(),
+            'status' => SalesOrderStatus::Draft,
+            'created_by' => $this->user->id,
+        ]);
+        SalesOrderLine::create([
+            'sales_order_id' => $order->id,
+            'product_id' => $this->product->id,
+            'quantity' => 5,
+            'unit_price' => 10,
+            'subtotal' => 50,
+        ]);
+
+        $confirmed = $this->confirm->confirm($order);
+        $this->cancel->cancel($confirmed);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/cancelled invoice/');
+
+        app(\App\Services\InvoiceService::class)->applyPayment(
+            $confirmed->fresh()->invoice,
+            10,
+            \App\Enums\PaymentMethod::Cash,
+        );
+    }
+
+    public function test_cancel_marks_delivery_cancelled(): void
+    {
+        $restaurant = Customer::create([
+            'name' => 'Grill',
+            'type' => CustomerType::Restaurant,
+            'payment_terms_days' => 15,
+            'credit_limit' => 5000,
+        ]);
+
+        $order = SalesOrder::create([
+            'customer_id' => $restaurant->id,
+            'channel' => SalesChannel::SalesOrder,
+            'order_date' => now()->toDateString(),
+            'status' => SalesOrderStatus::Draft,
+            'delivery_required' => true,
+            'delivery_date' => now()->addDay()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+        SalesOrderLine::create([
+            'sales_order_id' => $order->id,
+            'product_id' => $this->product->id,
+            'quantity' => 5,
+            'unit_price' => 10,
+            'subtotal' => 50,
+        ]);
+
+        $confirmed = $this->confirm->confirm($order);
+        $this->assertNotNull($confirmed->delivery);
+
+        $this->cancel->cancel($confirmed);
+
+        $this->assertEquals(
+            \App\Enums\DeliveryStatus::Cancelled,
+            $confirmed->fresh()->delivery->status
+        );
     }
 
     public function test_cannot_cancel_paid_order(): void

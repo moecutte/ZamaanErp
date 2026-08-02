@@ -8,6 +8,8 @@ use Filament\Widgets\ChartWidget;
 
 class RevenueByCustomerTypeWidget extends ChartWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected static ?string $heading = 'Revenue by Customer Type (30 days)';
     protected static ?int $sort = 11;
     protected int|string|array $columnSpan = 1;

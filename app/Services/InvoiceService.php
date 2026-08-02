@@ -24,11 +24,16 @@ class InvoiceService
      */
     public function generateForOrder(SalesOrder $order, ?PaymentMethod $retailMethod = PaymentMethod::Cash): Invoice
     {
-        if ($order->invoice()->exists()) {
-            return $order->invoice;
-        }
-
         return DB::transaction(function () use ($order, $retailMethod) {
+            $existing = Invoice::query()
+                ->where('sales_order_id', $order->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing->load('payments');
+            }
+
             $order->load(['lines', 'customer']);
 
             $total = round((float) $order->lines->sum('subtotal'), 2);
@@ -48,7 +53,7 @@ class InvoiceService
                 'status'         => InvoiceStatus::Unpaid,
             ]);
 
-            if ($isPos) {
+            if ($isPos && $total > 0) {
                 $this->applyPayment(
                     invoice: $invoice,
                     amount: $total,
@@ -78,6 +83,10 @@ class InvoiceService
         return DB::transaction(function () use ($invoice, $amount, $method, $paidAt, $recordedBy) {
             $invoice = Invoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
 
+            if ($invoice->status === InvoiceStatus::Cancelled) {
+                throw new \RuntimeException('Cannot record payment on a cancelled invoice.');
+            }
+
             $outstanding = round((float) $invoice->total_amount - (float) $invoice->amount_paid, 2);
 
             if ($amount > $outstanding + 0.001) {
@@ -104,6 +113,10 @@ class InvoiceService
 
     public function refreshStatus(Invoice $invoice): InvoiceStatus
     {
+        if ($invoice->status === InvoiceStatus::Cancelled) {
+            return InvoiceStatus::Cancelled;
+        }
+
         $status = $this->resolveStatus($invoice);
         $invoice->update(['status' => $status]);
 
@@ -133,6 +146,10 @@ class InvoiceService
 
     public function resolveStatus(Invoice $invoice): InvoiceStatus
     {
+        if ($invoice->status === InvoiceStatus::Cancelled) {
+            return InvoiceStatus::Cancelled;
+        }
+
         $paid = (float) $invoice->amount_paid;
         $total = (float) $invoice->total_amount;
 
@@ -159,19 +176,45 @@ class InvoiceService
             ->whereHas('salesOrder', fn ($q) => $q
                 ->where('customer_id', $customer->id)
                 ->whereNot('status', SalesOrderStatus::Cancelled))
-            ->whereNot('status', InvoiceStatus::Paid)
+            ->whereNotIn('status', [InvoiceStatus::Paid, InvoiceStatus::Cancelled])
             ->selectRaw('COALESCE(SUM(total_amount - amount_paid), 0) as outstanding')
             ->value('outstanding');
     }
 
     private function nextInvoiceNumber(): string
     {
-        $prefix = 'INV-' . now()->format('Ymd') . '-';
-        $last = Invoice::where('invoice_number', 'like', $prefix . '%')
-            ->orderByDesc('invoice_number')
-            ->lockForUpdate()
-            ->value('invoice_number');
+        $driver = DB::connection()->getDriverName();
 
+        if ($driver === 'mysql') {
+            $lockName = 'invoice_number_' . now()->format('Ymd');
+            $gotLock = DB::selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockName]);
+
+            if (! $gotLock || (int) $gotLock->acquired !== 1) {
+                throw new \RuntimeException('Could not acquire invoice number lock.');
+            }
+
+            try {
+                return $this->allocateInvoiceNumber();
+            } finally {
+                DB::select('SELECT RELEASE_LOCK(?)', [$lockName]);
+            }
+        }
+
+        // SQLite / other drivers: rely on row lock within the open transaction
+        return $this->allocateInvoiceNumber(lockRows: true);
+    }
+
+    private function allocateInvoiceNumber(bool $lockRows = false): string
+    {
+        $prefix = 'INV-' . now()->format('Ymd') . '-';
+        $query = Invoice::where('invoice_number', 'like', $prefix . '%')
+            ->orderByDesc('invoice_number');
+
+        if ($lockRows) {
+            $query->lockForUpdate();
+        }
+
+        $last = $query->value('invoice_number');
         $seq = $last ? ((int) substr($last, -4)) + 1 : 1;
 
         return $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);

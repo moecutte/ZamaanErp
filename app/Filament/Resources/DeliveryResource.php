@@ -27,7 +27,7 @@ class DeliveryResource extends Resource
     protected static ?string $model = Delivery::class;
     protected static ?string $navigationIcon = 'heroicon-o-map-pin';
     protected static ?string $navigationGroup = 'Sales';
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 4;
 
     public static function allowedRoles(): array
     {
@@ -88,6 +88,7 @@ class DeliveryResource extends Resource
                         DeliveryStatus::InTransit => 'info',
                         DeliveryStatus::Delivered => 'success',
                         DeliveryStatus::Failed    => 'danger',
+                        DeliveryStatus::Cancelled => 'gray',
                     }),
                 TextColumn::make('address')->limit(30)->toggleable(),
             ])

@@ -8,6 +8,7 @@ enum DeliveryStatus: string
     case InTransit = 'in_transit';
     case Delivered = 'delivered';
     case Failed = 'failed';
+    case Cancelled = 'cancelled';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum DeliveryStatus: string
             self::InTransit => 'In Transit',
             self::Delivered => 'Delivered',
             self::Failed => 'Failed',
+            self::Cancelled => 'Cancelled',
         };
     }
 }

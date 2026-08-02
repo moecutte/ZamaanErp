@@ -16,7 +16,7 @@ class PaymentsRelationManager extends RelationManager
     {
         return $table
             ->columns([
-                TextColumn::make('amount')->money('USD'),
+                TextColumn::make('amount')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
                 TextColumn::make('payment_method')
                     ->badge()
                     ->formatStateUsing(fn (PaymentMethod $state) => $state->label()),

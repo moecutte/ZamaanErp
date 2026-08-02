@@ -200,4 +200,29 @@ class PricingResolutionServiceTest extends TestCase
 
         $this->assertNull($price);
     }
+
+    public function test_form_specific_price_overrides_product_level(): void
+    {
+        $fillet = \App\Models\ProductForm::create([
+            'product_id' => $this->product->id,
+            'name' => 'Fillet',
+            'code' => 'fillet',
+            'is_base' => false,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        PriceListItem::create([
+            'pricing_tier_id' => $this->restaurantTier->id,
+            'product_id' => $this->product->id,
+            'product_form_id' => $fillet->id,
+            'price_per_unit' => 18.00,
+            'min_quantity' => 0,
+        ]);
+
+        $customer = $this->makeCustomer(CustomerType::Restaurant, $this->restaurantTier->id);
+
+        $this->assertEquals(12.00, $this->service->resolve($customer, $this->product, 1));
+        $this->assertEquals(18.00, $this->service->resolve($customer, $this->product, 1, $fillet));
+    }
 }

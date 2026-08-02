@@ -8,6 +8,7 @@ enum InvoiceStatus: string
     case Partial = 'partial';
     case Paid = 'paid';
     case Overdue = 'overdue';
+    case Cancelled = 'cancelled';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum InvoiceStatus: string
             self::Partial => 'Partial',
             self::Paid => 'Paid',
             self::Overdue => 'Overdue',
+            self::Cancelled => 'Cancelled',
         };
     }
 }

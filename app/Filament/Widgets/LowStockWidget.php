@@ -6,40 +6,46 @@ use App\Models\Product;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Support\Facades\DB;
 
 class LowStockWidget extends BaseWidget
 {
-    protected static ?string $heading = '📦 Low / Zero Stock Products';
+    protected static ?string $heading = 'Low / zero stock';
     protected static ?int $sort = 3;
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 1;
+
+    protected static bool $isLazy = true;
 
     /**
-     * Products whose total available quantity across all batches is ≤ 10.
-     * This threshold is intentionally low for an MVP; a per-product reorder
-     * point field can be added in a future phase.
+     * Products whose sellable (non-expired) qty is ≤ 10.
      */
     public function table(Table $table): Table
     {
+        $sellableSub = DB::table('batches')
+            ->selectRaw('product_id, COALESCE(SUM(quantity_available), 0) as sellable_qty')
+            ->where('quantity_available', '>', 0)
+            ->whereDate('expiry_date', '>=', now()->toDateString())
+            ->groupBy('product_id');
+
         return $table
             ->query(
                 Product::query()
-                    ->withSum('batches', 'quantity_available')
-                    ->having('batches_sum_quantity_available', '<=', 10)
-                    ->orHavingNull('batches_sum_quantity_available')
-                    ->orderBy('batches_sum_quantity_available', 'asc')
+                    ->leftJoinSub($sellableSub, 'sellable', 'sellable.product_id', '=', 'products.id')
+                    ->select('products.*')
+                    ->selectRaw('COALESCE(sellable.sellable_qty, 0) as sellable_qty')
+                    ->whereRaw('COALESCE(sellable.sellable_qty, 0) <= 10')
+                    ->orderByRaw('COALESCE(sellable.sellable_qty, 0) asc')
             )
             ->columns([
-                TextColumn::make('name')->searchable(),
-                TextColumn::make('sku')->copyable(),
-                TextColumn::make('unit_type')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state->label()),
-                TextColumn::make('batches_sum_quantity_available')
-                    ->label('Total Available')
-                    ->numeric(decimalPlaces: 3)
-                    ->default('0.000')
+                TextColumn::make('name')->searchable()->limit(18),
+                TextColumn::make('sku')->limit(12),
+                TextColumn::make('sellable_qty')
+                    ->label('Qty')
+                    ->numeric(decimalPlaces: 1)
+                    ->default('0.0')
                     ->color(fn ($state) => ((float) ($state ?? 0)) <= 0 ? 'danger' : 'warning'),
             ])
-            ->paginated(false);
+            ->paginated([5])
+            ->defaultPaginationPageOption(5);
     }
 }

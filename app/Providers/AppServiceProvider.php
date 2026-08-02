@@ -3,12 +3,15 @@
 namespace App\Providers;
 
 use App\Models\Batch;
+use App\Models\Product;
 use App\Observers\BatchObserver;
+use App\Observers\ProductObserver;
 use App\Services\CancelSalesOrderService;
 use App\Services\ConfirmSalesOrderService;
 use App\Services\DeliveryService;
 use App\Services\InvoiceService;
 use App\Services\PricingResolutionService;
+use App\Services\ProcessProductFormService;
 use App\Services\ReceivePurchaseOrderService;
 use App\Services\ReportExportService;
 use App\Services\ReportService;
@@ -29,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ConfirmSalesOrderService::class);
         $this->app->singleton(CancelSalesOrderService::class);
         $this->app->singleton(WastageService::class);
+        $this->app->singleton(ProcessProductFormService::class);
         $this->app->singleton(InvoiceService::class);
         $this->app->singleton(DeliveryService::class);
         $this->app->singleton(ReportService::class);
@@ -42,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
             URL::forceRootUrl($root);
         }
 
+        Product::observe(ProductObserver::class);
         Batch::observe(BatchObserver::class);
     }
 }

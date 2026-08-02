@@ -7,6 +7,8 @@ use Filament\Widgets\ChartWidget;
 
 class StockAgingWidget extends ChartWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected static ?string $heading = 'Stock Aging (by days to expiry)';
     protected static ?int $sort = 14;
     protected int|string|array $columnSpan = 'full';

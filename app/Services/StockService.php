@@ -95,6 +95,57 @@ class StockService
         });
     }
 
+    public function recordProcessingOut(
+        Batch $batch,
+        float $quantity,
+        ?Model $reference = null,
+        ?int $createdBy = null,
+    ): StockMovement {
+        if ($quantity <= 0) {
+            throw new \InvalidArgumentException('Processing out quantity must be greater than zero.');
+        }
+
+        return DB::transaction(function () use ($batch, $quantity, $reference, $createdBy) {
+            $locked = Batch::query()->whereKey($batch->id)->lockForUpdate()->firstOrFail();
+            $this->guardSufficientStock($locked, $quantity);
+            $locked->decrement('quantity_available', $quantity);
+
+            return $this->createMovement(
+                batch: $locked,
+                type: StockMovementType::ProcessingOut,
+                quantity: $quantity,
+                reference: $reference,
+                reason: 'Form processing',
+                createdBy: $createdBy,
+            );
+        });
+    }
+
+    public function recordProcessingIn(
+        Batch $batch,
+        float $quantity,
+        ?Model $reference = null,
+        ?int $createdBy = null,
+    ): StockMovement {
+        if ($quantity <= 0) {
+            throw new \InvalidArgumentException('Processing in quantity must be greater than zero.');
+        }
+
+        return DB::transaction(function () use ($batch, $quantity, $reference, $createdBy) {
+            $locked = Batch::query()->whereKey($batch->id)->lockForUpdate()->firstOrFail();
+            $locked->increment('quantity_available', $quantity);
+
+            return $this->createMovement(
+                batch: $locked,
+                type: StockMovementType::ProcessingIn,
+                quantity: $quantity,
+                reference: $reference,
+                reason: 'Form processing',
+                createdBy: $createdBy,
+            );
+        });
+    }
+
     public function recordAdjustment(
         Batch $batch,
         float $quantity,

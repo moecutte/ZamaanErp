@@ -20,8 +20,8 @@ class LinesRelationManager extends RelationManager
                     ->label('Batch')
                     ->placeholder('Not allocated'),
                 TextColumn::make('quantity')->numeric(decimalPlaces: 3),
-                TextColumn::make('unit_price')->money('USD'),
-                TextColumn::make('subtotal')->money('USD'),
+                TextColumn::make('unit_price')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
+                TextColumn::make('subtotal')->formatStateUsing(fn ($state) => \App\Support\Money::format($state)),
             ])
             ->paginated(false);
     }

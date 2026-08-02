@@ -26,6 +26,8 @@ class SalesOrderResource extends JsonResource
                 'id' => $line->id,
                 'product_id' => $line->product_id,
                 'product_name' => $line->product?->name,
+                'product_form_id' => $line->product_form_id,
+                'product_form' => $line->productForm?->name,
                 'batch_id' => $line->batch_id,
                 'batch_code' => $line->batch?->batch_code,
                 'quantity' => (float) $line->quantity,

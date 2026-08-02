@@ -45,6 +45,25 @@ class BatchResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required()
+                ->live()
+                ->afterStateUpdated(fn (callable $set) => $set('product_form_id', null))
+                ->disabled(fn (?Batch $record) => $record !== null),
+
+            Select::make('product_form_id')
+                ->label('Form')
+                ->options(function (callable $get) {
+                    $productId = $get('product_id');
+                    if (! $productId) {
+                        return [];
+                    }
+
+                    return \App\Models\ProductForm::query()
+                        ->where('product_id', $productId)
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->pluck('name', 'id');
+                })
+                ->required()
                 ->disabled(fn (?Batch $record) => $record !== null),
 
             Select::make('supplier_id')
@@ -74,7 +93,7 @@ class BatchResource extends Resource
 
             TextInput::make('unit_cost')
                 ->numeric()
-                ->prefix('$')
+                ->suffix(' ' . \App\Support\Money::label())
                 ->required()
                 ->minValue(0),
 
@@ -108,6 +127,11 @@ class BatchResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                TextColumn::make('productForm.name')
+                    ->label('Form')
+                    ->badge()
+                    ->sortable(),
+
                 TextColumn::make('supplier.name')
                     ->toggleable(),
 
@@ -135,7 +159,7 @@ class BatchResource extends Resource
                     ]),
 
                 TextColumn::make('unit_cost')
-                    ->money('USD')
+                    ->formatStateUsing(fn ($state) => \App\Support\Money::format($state))
                     ->toggleable(),
             ])
             ->defaultSort('expiry_date', 'asc')
@@ -184,7 +208,7 @@ class BatchResource extends Resource
             ->bulkActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
-    public static function getRelationManagers(): array
+    public static function getRelations(): array
     {
         return [
             StockMovementsRelationManager::class,

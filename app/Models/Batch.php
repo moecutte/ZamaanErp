@@ -14,6 +14,7 @@ class Batch extends Model
 
     protected $fillable = [
         'product_id',
+        'product_form_id',
         'batch_code',
         'supplier_id',
         'catch_date',
@@ -41,6 +42,11 @@ class Batch extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productForm(): BelongsTo
+    {
+        return $this->belongsTo(ProductForm::class);
     }
 
     public function supplier(): BelongsTo

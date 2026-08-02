@@ -64,7 +64,7 @@ class DemoDataSeeder extends Seeder
                 'contact_phone' => '+252 61 111 1001',
                 'contact_email' => 'ahmed.fish@example.com',
                 'address' => 'Lido Beach Landing, Mogadishu',
-                'notes' => 'Fresh daily catch — tuna, kingfish, lobster.',
+                'notes' => 'Fresh daily catch — Hilib Case, Tuna, Bayaad, and more.',
             ]
         );
 
@@ -86,37 +86,51 @@ class DemoDataSeeder extends Seeder
                 'contact_phone' => '+971 50 333 3003',
                 'contact_email' => 'export@ioimports.ae',
                 'address' => 'Dubai Seafood Market Gate 4',
-                'notes' => 'Imported prawns, salmon, crab.',
+                'notes' => 'Imported Tamad, Laqam, Garam.',
             ]
         );
 
         // --- Products ---
+        // Keys are stable legacy SKUs so re-seeding updates existing demo rows.
         $products = [
-            ['name' => 'Yellowfin Tuna', 'species' => 'Thunnus albacares', 'category' => 'Fish', 'unit_type' => UnitType::WeightKg, 'sku' => 'FISH-TUN-001'],
-            ['name' => 'Kingfish', 'species' => 'Scomberomorus', 'category' => 'Fish', 'unit_type' => UnitType::WeightKg, 'sku' => 'FISH-KIN-001'],
-            ['name' => 'Red Snapper', 'species' => 'Lutjanus', 'category' => 'Fish', 'unit_type' => UnitType::WeightKg, 'sku' => 'FISH-SNP-001'],
-            ['name' => 'Lobster', 'species' => 'Panulirus', 'category' => 'Shellfish', 'unit_type' => UnitType::WeightKg, 'sku' => 'SHL-LOB-001'],
-            ['name' => 'Tiger Prawns', 'species' => 'Penaeus monodon', 'category' => 'Shellfish', 'unit_type' => UnitType::WeightKg, 'sku' => 'SHL-PRW-001'],
-            ['name' => 'Atlantic Salmon', 'species' => 'Salmo salar', 'category' => 'Fish', 'unit_type' => UnitType::WeightKg, 'sku' => 'FISH-SAL-001'],
-            ['name' => 'Squid', 'species' => 'Loligo', 'category' => 'Cephalopod', 'unit_type' => UnitType::WeightKg, 'sku' => 'CEP-SQD-001'],
-            ['name' => 'Mixed Fish Box', 'species' => 'Assorted', 'category' => 'Mixed', 'unit_type' => UnitType::Box, 'sku' => 'BOX-MIX-001'],
-            ['name' => 'Crab (piece)', 'species' => 'Portunus', 'category' => 'Shellfish', 'unit_type' => UnitType::Piece, 'sku' => 'SHL-CRB-001'],
-            ['name' => 'Dried Shark Fins (demo)', 'species' => 'Carcharhinus', 'category' => 'Specialty', 'unit_type' => UnitType::WeightG, 'sku' => 'SPC-SHK-001'],
+            'FISH-TUN-001' => ['name' => 'Hilib Case', 'species' => 'Hilib Case', 'sku' => 'FISH-HCS-001'],
+            'FISH-KIN-001' => ['name' => 'Tuna', 'species' => 'Tuna', 'sku' => 'FISH-TUN-001'],
+            'FISH-SNP-001' => ['name' => 'Bayaad', 'species' => 'Bayaad', 'sku' => 'FISH-BAY-001'],
+            'SHL-LOB-001' => ['name' => 'Mix', 'species' => 'Mix', 'sku' => 'FISH-MIX-001'],
+            'SHL-PRW-001' => ['name' => 'Hilib Cade', 'species' => 'Hilib Cade', 'sku' => 'FISH-HCD-001'],
+            'FISH-SAL-001' => ['name' => 'Gaxash', 'species' => 'Gaxash', 'sku' => 'FISH-GAX-001'],
+            'CEP-SQD-001' => ['name' => 'Sakhlad', 'species' => 'Sakhlad', 'sku' => 'FISH-SAK-001'],
+            'BOX-MIX-001' => ['name' => 'Tamad', 'species' => 'Tamad', 'sku' => 'FISH-TAM-001'],
+            'SHL-CRB-001' => ['name' => 'Laqam', 'species' => 'Laqam', 'sku' => 'FISH-LAQ-001'],
+            'SPC-SHK-001' => ['name' => 'Garam', 'species' => 'Garam', 'sku' => 'FISH-GAR-001'],
         ];
 
         $productModels = [];
-        foreach ($products as $p) {
-            $productModels[$p['sku']] = Product::firstOrCreate(
-                ['sku' => $p['sku']],
-                [
-                    'name' => $p['name'],
-                    'species' => $p['species'],
-                    'category' => $p['category'],
-                    'unit_type' => $p['unit_type'],
-                    'description' => "Premium {$p['name']} for retail and HORECA.",
-                ]
-            );
+        foreach ($products as $legacySku => $p) {
+            $product = Product::query()->where('sku', $p['sku'])->first()
+                ?? Product::query()->where('sku', $legacySku)->first();
+
+            $attributes = [
+                'name' => $p['name'],
+                'species' => $p['species'],
+                'category' => 'Fish',
+                'unit_type' => UnitType::WeightKg,
+                'sku' => $p['sku'],
+                'description' => "Premium {$p['name']} for retail and HORECA.",
+            ];
+
+            if ($product) {
+                $product->update($attributes);
+            } else {
+                $product = Product::create($attributes);
+            }
+
+            $productModels[$p['sku']] = $product->fresh();
         }
+
+        // Refresh supplier notes for renamed product set
+        $fisherman->update(['notes' => 'Fresh daily catch — Hilib Case, Tuna, Bayaad, and more.']);
+        $importer->update(['notes' => 'Imported Tamad, Laqam, Garam.']);
 
         // --- Pricing tiers ---
         $retailTier = PricingTier::firstOrCreate(
@@ -132,43 +146,31 @@ class DemoDataSeeder extends Seeder
             ['customer_type' => CustomerType::Retailer]
         );
 
-        // price maps: retail / restaurant / wholesale base / wholesale break@50 / wholesale break@100
-        $prices = [
-            'FISH-TUN-001' => [18, 15, 12, 10, 8],
-            'FISH-KIN-001' => [16, 13, 11, 9, 7.5],
-            'FISH-SNP-001' => [20, 17, 14, 12, 10],
-            'SHL-LOB-001' => [35, 30, 26, 22, 19],
-            'SHL-PRW-001' => [22, 18, 15, 13, 11],
-            'FISH-SAL-001' => [28, 24, 20, 17, 15],
-            'CEP-SQD-001' => [12, 10, 8, 7, 6],
-            'BOX-MIX-001' => [45, 40, 35, 32, 28],
-            'SHL-CRB-001' => [8, 6.5, 5, 4.5, 4],
-            'SPC-SHK-001' => [2.5, 2.0, 1.5, 1.2, 1.0],
-        ];
+        $sellPrice = 50000;
+        $unitCost = 30000;
 
-        foreach ($prices as $sku => [$retail, $rest, $whBase, $wh50, $wh100]) {
+        // Flat Slsh pricing for all demo products / tiers
+        foreach (array_keys($productModels) as $sku) {
             $productId = $productModels[$sku]->id;
 
-            PriceListItem::firstOrCreate(
-                ['pricing_tier_id' => $retailTier->id, 'product_id' => $productId, 'min_quantity' => 0],
-                ['price_per_unit' => $retail]
-            );
-            PriceListItem::firstOrCreate(
-                ['pricing_tier_id' => $restaurantTier->id, 'product_id' => $productId, 'min_quantity' => 0],
-                ['price_per_unit' => $rest]
-            );
-            PriceListItem::firstOrCreate(
-                ['pricing_tier_id' => $wholesaleTier->id, 'product_id' => $productId, 'min_quantity' => 0],
-                ['price_per_unit' => $whBase]
-            );
-            PriceListItem::firstOrCreate(
-                ['pricing_tier_id' => $wholesaleTier->id, 'product_id' => $productId, 'min_quantity' => 50],
-                ['price_per_unit' => $wh50]
-            );
-            PriceListItem::firstOrCreate(
-                ['pricing_tier_id' => $wholesaleTier->id, 'product_id' => $productId, 'min_quantity' => 100],
-                ['price_per_unit' => $wh100]
-            );
+            foreach (
+                [
+                    [$retailTier->id, 0],
+                    [$restaurantTier->id, 0],
+                    [$wholesaleTier->id, 0],
+                    [$wholesaleTier->id, 50],
+                    [$wholesaleTier->id, 100],
+                ] as [$tierId, $minQty]
+            ) {
+                PriceListItem::updateOrCreate(
+                    [
+                        'pricing_tier_id' => $tierId,
+                        'product_id' => $productId,
+                        'min_quantity' => $minQty,
+                    ],
+                    ['price_per_unit' => $sellPrice]
+                );
+            }
         }
 
         // --- Customers ---
@@ -200,7 +202,7 @@ class DemoDataSeeder extends Seeder
                 'contact_email' => 'orders@oceangrill.so',
                 'address' => 'Lido Corniche, Mogadishu',
                 'pricing_tier_id' => $restaurantTier->id,
-                'credit_limit' => 5000,
+                'credit_limit' => 5_000_000,
                 'payment_terms_days' => 14,
             ]
         );
@@ -212,7 +214,7 @@ class DemoDataSeeder extends Seeder
                 'contact_email' => 'chef@pearl.so',
                 'address' => 'Airport Road, Mogadishu',
                 'pricing_tier_id' => $restaurantTier->id,
-                'credit_limit' => 3000,
+                'credit_limit' => 3_000_000,
                 'payment_terms_days' => 7,
             ]
         );
@@ -224,7 +226,7 @@ class DemoDataSeeder extends Seeder
                 'contact_email' => 'buying@redseatrade.so',
                 'address' => 'Hargeisa Cold Store Complex',
                 'pricing_tier_id' => $wholesaleTier->id,
-                'credit_limit' => 25000,
+                'credit_limit' => 25_000_000,
                 'payment_terms_days' => 30,
             ]
         );
@@ -236,18 +238,34 @@ class DemoDataSeeder extends Seeder
                 'contact_email' => 'procurement@citymart.so',
                 'address' => 'Bakaaro Wholesale Market',
                 'pricing_tier_id' => $wholesaleTier->id,
-                'credit_limit' => 15000,
+                'credit_limit' => 15_000_000,
                 'payment_terms_days' => 21,
             ]
         );
 
-        // Negotiated restaurant override on lobster
-        CustomerPriceOverride::firstOrCreate(
+        // Keep existing demo customer credit limits on Slsh scale
+        Customer::whereIn('name', [
+            'Ocean Grill Restaurant',
+            'Pearl Seafood Restaurant',
+            'Red Sea Retail Traders',
+            'City Mart Distributors',
+        ])->each(function (Customer $customer) {
+            $limits = [
+                'Ocean Grill Restaurant' => 5_000_000,
+                'Pearl Seafood Restaurant' => 3_000_000,
+                'Red Sea Retail Traders' => 25_000_000,
+                'City Mart Distributors' => 15_000_000,
+            ];
+            $customer->update(['credit_limit' => $limits[$customer->name]]);
+        });
+
+        // Negotiated restaurant override on Mix (same sell price in Slsh)
+        CustomerPriceOverride::updateOrCreate(
             [
                 'customer_id' => $oceanGrill->id,
-                'product_id' => $productModels['SHL-LOB-001']->id,
+                'product_id' => $productModels['FISH-MIX-001']->id,
             ],
-            ['price_per_unit' => 27.50]
+            ['price_per_unit' => $sellPrice]
         );
 
         // --- Purchase order + receive (creates batches via service) ---
@@ -260,12 +278,12 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $poLines = [
-                ['sku' => 'FISH-TUN-001', 'qty' => 120, 'cost' => 6],
-                ['sku' => 'FISH-KIN-001', 'qty' => 80, 'cost' => 5],
-                ['sku' => 'SHL-LOB-001', 'qty' => 40, 'cost' => 18],
-                ['sku' => 'SHL-PRW-001', 'qty' => 60, 'cost' => 9],
-                ['sku' => 'CEP-SQD-001', 'qty' => 50, 'cost' => 4],
-                ['sku' => 'BOX-MIX-001', 'qty' => 25, 'cost' => 20],
+                ['sku' => 'FISH-HCS-001', 'qty' => 120, 'cost' => $unitCost],
+                ['sku' => 'FISH-TUN-001', 'qty' => 80, 'cost' => $unitCost],
+                ['sku' => 'FISH-MIX-001', 'qty' => 40, 'cost' => $unitCost],
+                ['sku' => 'FISH-HCD-001', 'qty' => 60, 'cost' => $unitCost],
+                ['sku' => 'FISH-SAK-001', 'qty' => 50, 'cost' => $unitCost],
+                ['sku' => 'FISH-TAM-001', 'qty' => 25, 'cost' => $unitCost],
             ];
 
             $total = 0;
@@ -304,48 +322,48 @@ class DemoDataSeeder extends Seeder
 
             $demoBatches = [
                 [
-                    'product_id' => $productModels['FISH-SAL-001']->id,
+                    'product_id' => $productModels['FISH-GAX-001']->id,
                     'supplier_id' => $importer->id,
-                    'batch_code' => 'BCH-DEMO-SALMON01',
+                    'batch_code' => 'BCH-DEMO-GAXASH01',
                     'catch_date' => now()->subDays(10)->toDateString(),
                     'production_date' => now()->subDays(8)->toDateString(),
                     'expiry_date' => now()->addDays(1)->toDateString(),
                     'qty' => 30,
                     'storage_location' => StorageLocation::Frozen,
-                    'unit_cost' => 12,
+                    'unit_cost' => $unitCost,
                 ],
                 [
-                    'product_id' => $productModels['FISH-SNP-001']->id,
+                    'product_id' => $productModels['FISH-BAY-001']->id,
                     'supplier_id' => $fisherman->id,
-                    'batch_code' => 'BCH-DEMO-SNAP01',
+                    'batch_code' => 'BCH-DEMO-BAYAAD01',
                     'catch_date' => now()->subDay()->toDateString(),
                     'production_date' => now()->toDateString(),
                     'expiry_date' => now()->addDays(3)->toDateString(),
                     'qty' => 45,
                     'storage_location' => StorageLocation::Fresh,
-                    'unit_cost' => 8,
+                    'unit_cost' => $unitCost,
                 ],
                 [
-                    'product_id' => $productModels['SHL-CRB-001']->id,
+                    'product_id' => $productModels['FISH-LAQ-001']->id,
                     'supplier_id' => $fisherman->id,
-                    'batch_code' => 'BCH-DEMO-CRAB01',
+                    'batch_code' => 'BCH-DEMO-LAQAM01',
                     'catch_date' => now()->subDays(2)->toDateString(),
                     'production_date' => now()->subDay()->toDateString(),
                     'expiry_date' => now()->addDays(7)->toDateString(),
                     'qty' => 100,
                     'storage_location' => StorageLocation::Chilled,
-                    'unit_cost' => 2.5,
+                    'unit_cost' => $unitCost,
                 ],
                 [
-                    'product_id' => $productModels['SPC-SHK-001']->id,
+                    'product_id' => $productModels['FISH-GAR-001']->id,
                     'supplier_id' => $importer->id,
-                    'batch_code' => 'BCH-DEMO-SPEC01',
+                    'batch_code' => 'BCH-DEMO-GARAM01',
                     'catch_date' => now()->subDays(20)->toDateString(),
                     'production_date' => now()->subDays(15)->toDateString(),
                     'expiry_date' => now()->addDays(90)->toDateString(),
                     'qty' => 500,
                     'storage_location' => StorageLocation::Frozen,
-                    'unit_cost' => 0.8,
+                    'unit_cost' => $unitCost,
                 ],
             ];
 
@@ -359,10 +377,31 @@ class DemoDataSeeder extends Seeder
                 ]);
                 $stock->recordIn($batch, $qty, reason: 'Demo stock seed');
             }
+        } else {
+            // Keep existing demo batch codes in sync with renamed products
+            $batchCodeMap = [
+                'BCH-DEMO-SALMON01' => 'BCH-DEMO-GAXASH01',
+                'BCH-DEMO-SNAP01' => 'BCH-DEMO-BAYAAD01',
+                'BCH-DEMO-CRAB01' => 'BCH-DEMO-LAQAM01',
+                'BCH-DEMO-SPEC01' => 'BCH-DEMO-GARAM01',
+            ];
+            foreach ($batchCodeMap as $from => $to) {
+                Batch::where('batch_code', $from)->update(['batch_code' => $to]);
+            }
         }
 
+        // Sync existing demo costs/sell prices to Slsh
+        Batch::query()->update(['unit_cost' => $unitCost]);
+        PurchaseOrderLine::query()->update(['unit_cost' => $unitCost]);
+        PurchaseOrder::query()->with('lines')->each(function (PurchaseOrder $po) {
+            $po->update([
+                'total_cost' => round($po->lines->sum(fn ($l) => (float) $l->quantity * (float) $l->unit_cost), 2),
+            ]);
+        });
+        CustomerPriceOverride::query()->update(['price_per_unit' => $sellPrice]);
+
         // Record a bit of wastage for dashboard stats
-        $nearExpiryBatch = Batch::where('batch_code', 'BCH-DEMO-SALMON01')->first();
+        $nearExpiryBatch = Batch::whereIn('batch_code', ['BCH-DEMO-GAXASH01', 'BCH-DEMO-SALMON01'])->first();
         if ($nearExpiryBatch && $nearExpiryBatch->quantity_available >= 30) {
             app(WastageService::class)->record(
                 $nearExpiryBatch,
@@ -376,112 +415,121 @@ class DemoDataSeeder extends Seeder
         // --- Sales orders via confirm service ---
         $confirm = app(ConfirmSalesOrderService::class);
 
-        if (! SalesOrder::where('channel', SalesChannel::Pos)->exists()) {
-            $retailOrder = SalesOrder::create([
-                'customer_id' => $walkIn->id,
-                'channel' => SalesChannel::Pos,
-                'order_date' => now()->toDateString(),
-                'status' => SalesOrderStatus::Draft,
-                'delivery_required' => false,
-                'created_by' => $sales->id,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $retailOrder->id,
-                'product_id' => $productModels['FISH-TUN-001']->id,
-                'quantity' => 3,
-                'unit_price' => 18,
-                'subtotal' => 54,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $retailOrder->id,
-                'product_id' => $productModels['SHL-CRB-001']->id,
-                'quantity' => 4,
-                'unit_price' => 8,
-                'subtotal' => 32,
-            ]);
-            $confirm->confirm($retailOrder, PaymentMethod::Cash);
-        }
-
-        if (! SalesOrder::where('channel', SalesChannel::SalesOrder)->exists()) {
-            $restOrder = SalesOrder::create([
-                'customer_id' => $oceanGrill->id,
-                'channel' => SalesChannel::SalesOrder,
-                'order_date' => now()->subDay()->toDateString(),
-                'status' => SalesOrderStatus::Draft,
-                'delivery_required' => true,
-                'delivery_date' => now()->toDateString(),
-                'created_by' => $sales->id,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $restOrder->id,
-                'product_id' => $productModels['SHL-LOB-001']->id,
-                'quantity' => 8,
-                'unit_price' => 27.50, // override
-                'subtotal' => 220,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $restOrder->id,
-                'product_id' => $productModels['FISH-SNP-001']->id,
-                'quantity' => 12,
-                'unit_price' => 17,
-                'subtotal' => 204,
-            ]);
-            $restOrder = $confirm->confirm($restOrder);
-
-            if ($restOrder->delivery) {
-                $restOrder->delivery->update([
-                    'delivery_staff_id' => $driver->id,
-                    'status' => DeliveryStatus::InTransit,
-                    'notes' => 'Leave at kitchen loading bay.',
+        try {
+            if (! SalesOrder::where('channel', SalesChannel::Pos)->exists()) {
+                $retailOrder = SalesOrder::create([
+                    'customer_id' => $walkIn->id,
+                    'channel' => SalesChannel::Pos,
+                    'order_date' => now()->toDateString(),
+                    'status' => SalesOrderStatus::Draft,
+                    'delivery_required' => false,
+                    'created_by' => $sales->id,
                 ]);
-            }
-
-            // Partial payment on restaurant invoice
-            if ($restOrder->invoice) {
-                app(\App\Services\InvoiceService::class)->applyPayment(
-                    $restOrder->invoice,
-                    200,
-                    PaymentMethod::Zaad,
-                    now(),
-                    $sales->id
-                );
-            }
-        }
-
-        if (! SalesOrder::where('customer_id', $bulkBuyer->id)->exists()) {
-            $whOrder = SalesOrder::create([
-                'customer_id' => $bulkBuyer->id,
-                'channel' => SalesChannel::SalesOrder,
-                'order_date' => now()->subDays(2)->toDateString(),
-                'status' => SalesOrderStatus::Draft,
-                'delivery_required' => true,
-                'delivery_date' => now()->addDay()->toDateString(),
-                'created_by' => $sales->id,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $whOrder->id,
-                'product_id' => $productModels['FISH-TUN-001']->id,
-                'quantity' => 55, // hits qty break @50
-                'unit_price' => 10,
-                'subtotal' => 550,
-            ]);
-            SalesOrderLine::create([
-                'sales_order_id' => $whOrder->id,
-                'product_id' => $productModels['SHL-PRW-001']->id,
-                'quantity' => 40,
-                'unit_price' => 15,
-                'subtotal' => 600,
-            ]);
-            $whOrder = $confirm->confirm($whOrder);
-
-            if ($whOrder->delivery) {
-                $whOrder->delivery->update([
-                    'delivery_staff_id' => $driver->id,
-                    'status' => DeliveryStatus::Pending,
-                    'address' => $bulkBuyer->address,
-                    'notes' => 'Cold truck required.',
+                SalesOrderLine::create([
+                    'sales_order_id' => $retailOrder->id,
+                    'product_id' => $productModels['FISH-HCS-001']->id,
+                    'quantity' => 3,
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 3 * $sellPrice,
                 ]);
+                SalesOrderLine::create([
+                    'sales_order_id' => $retailOrder->id,
+                    'product_id' => $productModels['FISH-LAQ-001']->id,
+                    'quantity' => 4,
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 4 * $sellPrice,
+                ]);
+                $confirm->confirm($retailOrder, PaymentMethod::Cash);
             }
+
+            if (! SalesOrder::where('channel', SalesChannel::SalesOrder)->exists()) {
+                $restOrder = SalesOrder::create([
+                    'customer_id' => $oceanGrill->id,
+                    'channel' => SalesChannel::SalesOrder,
+                    'order_date' => now()->subDay()->toDateString(),
+                    'status' => SalesOrderStatus::Draft,
+                    'delivery_required' => true,
+                    'delivery_date' => now()->toDateString(),
+                    'created_by' => $sales->id,
+                ]);
+                SalesOrderLine::create([
+                    'sales_order_id' => $restOrder->id,
+                    'product_id' => $productModels['FISH-MIX-001']->id,
+                    'quantity' => 8,
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 8 * $sellPrice,
+                ]);
+                SalesOrderLine::create([
+                    'sales_order_id' => $restOrder->id,
+                    'product_id' => $productModels['FISH-BAY-001']->id,
+                    'quantity' => 12,
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 12 * $sellPrice,
+                ]);
+                $restOrder = $confirm->confirm($restOrder);
+
+                if ($restOrder->delivery) {
+                    $restOrder->delivery->update([
+                        'delivery_staff_id' => $driver->id,
+                        'status' => DeliveryStatus::InTransit,
+                        'notes' => 'Leave at kitchen loading bay.',
+                    ]);
+                }
+
+                // Partial payment on restaurant invoice
+                if ($restOrder->invoice) {
+                    app(\App\Services\InvoiceService::class)->applyPayment(
+                        $restOrder->invoice,
+                        200_000,
+                        PaymentMethod::Zaad,
+                        now(),
+                        $sales->id
+                    );
+                }
+            }
+
+            if (! SalesOrder::where('customer_id', $bulkBuyer->id)->exists()) {
+                $whOrder = SalesOrder::create([
+                    'customer_id' => $bulkBuyer->id,
+                    'channel' => SalesChannel::SalesOrder,
+                    'order_date' => now()->subDays(2)->toDateString(),
+                    'status' => SalesOrderStatus::Draft,
+                    'delivery_required' => true,
+                    'delivery_date' => now()->addDay()->toDateString(),
+                    'created_by' => $sales->id,
+                ]);
+                SalesOrderLine::create([
+                    'sales_order_id' => $whOrder->id,
+                    'product_id' => $productModels['FISH-HCS-001']->id,
+                    'quantity' => 55, // hits qty break @50
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 55 * $sellPrice,
+                ]);
+                SalesOrderLine::create([
+                    'sales_order_id' => $whOrder->id,
+                    'product_id' => $productModels['FISH-HCD-001']->id,
+                    'quantity' => 40,
+                    'unit_price' => $sellPrice,
+                    'subtotal' => 40 * $sellPrice,
+                ]);
+                $whOrder = $confirm->confirm($whOrder);
+
+                if ($whOrder->delivery) {
+                    $whOrder->delivery->update([
+                        'delivery_staff_id' => $driver->id,
+                        'status' => DeliveryStatus::Pending,
+                        'address' => $bulkBuyer->address,
+                        'notes' => 'Cold truck required.',
+                    ]);
+                }
+            }
+        } catch (\RuntimeException $e) {
+            // Product/batch renames already applied; skip demo sales if stock is short.
+            $this->command?->warn('Skipped demo sales order seeding: '.$e->getMessage());
+            SalesOrder::query()
+                ->where('status', SalesOrderStatus::Draft)
+                ->whereDoesntHave('invoice')
+                ->delete();
         }
 
         $this->command?->info('Demo data seeded successfully.');

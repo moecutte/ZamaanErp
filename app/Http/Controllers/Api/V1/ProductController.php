@@ -17,7 +17,7 @@ class ProductController extends Controller
             403
         );
 
-        $query = Product::query()->orderBy('name');
+        $query = Product::query()->with('forms')->orderBy('name');
 
         if ($search = $request->string('search')->toString()) {
             $query->where(function ($q) use ($search) {
@@ -37,6 +37,6 @@ class ProductController extends Controller
             403
         );
 
-        return new ProductResource($product);
+        return new ProductResource($product->load('forms'));
     }
 }
