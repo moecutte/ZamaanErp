@@ -110,6 +110,7 @@ class DemoDataSeeder extends Seeder
             $product = Product::query()->where('sku', $p['sku'])->first()
                 ?? Product::query()->where('sku', $legacySku)->first();
 
+            $imagePath = 'products/' . strtolower($p['sku']) . '.jpg';
             $attributes = [
                 'name' => $p['name'],
                 'species' => $p['species'],
@@ -117,6 +118,7 @@ class DemoDataSeeder extends Seeder
                 'unit_type' => UnitType::WeightKg,
                 'sku' => $p['sku'],
                 'description' => "Premium {$p['name']} for retail and HORECA.",
+                'image' => file_exists(storage_path('app/public/' . $imagePath)) ? $imagePath : null,
             ];
 
             if ($product) {

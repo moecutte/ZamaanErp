@@ -62,7 +62,20 @@
                             wire:click="addToCart({{ $product->id }}, {{ $product->form_id }})"
                             @disabled(! $product->in_stock || ! $customerId || $product->price === null)
                         >
-                            <div>
+                            <div class="pos-product-media">
+                                @if ($product->image_url)
+                                    <img src="{{ $product->image_url }}" alt="{{ $product->name }}" class="pos-product-img" loading="lazy">
+                                @else
+                                    <div class="pos-product-img-fallback" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-9Z"/>
+                                            <circle cx="9" cy="10" r="1.5"/>
+                                            <path d="m4.5 16 4.2-4.2a1.5 1.5 0 0 1 2.1 0L16 17m-2.5-2.5 1.4-1.4a1.5 1.5 0 0 1 2.1 0L20 15.5"/>
+                                        </svg>
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="pos-product-body">
                                 <div class="pos-product-name">{{ $product->name }}</div>
                                 <div class="pos-product-sku">{{ $product->sku }} · {{ $product->form }}</div>
                             </div>

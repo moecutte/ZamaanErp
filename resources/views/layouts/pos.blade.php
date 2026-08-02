@@ -165,15 +165,16 @@
         }
         .pos-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
             gap: 10px;
         }
         .pos-product {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-height: 120px;
-            padding: 12px;
+            min-height: 210px;
+            padding: 0;
+            overflow: hidden;
             border: 1px solid var(--pos-line);
             border-radius: 8px;
             background: var(--pos-card);
@@ -189,6 +190,34 @@
         .pos-product:disabled {
             opacity: 0.4;
             cursor: not-allowed;
+        }
+        .pos-product-media {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #1f1f1f;
+            overflow: hidden;
+        }
+        .pos-product-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .pos-product-img-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
+        }
+        .pos-product-img-fallback svg {
+            width: 36px;
+            height: 36px;
+        }
+        .pos-product-body {
+            padding: 10px 12px 0;
         }
         .pos-product-name {
             font-size: 13px;
@@ -210,7 +239,8 @@
             justify-content: space-between;
             align-items: flex-end;
             gap: 8px;
-            margin-top: 10px;
+            margin-top: auto;
+            padding: 10px 12px 12px;
         }
         .pos-product-price {
             font-size: 16px;

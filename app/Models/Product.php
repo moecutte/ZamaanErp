@@ -18,6 +18,11 @@ class Product extends Model
         'unit_type',
         'sku',
         'description',
+        'image',
+    ];
+
+    protected $appends = [
+        'image_url',
     ];
 
     protected function casts(): array
@@ -25,6 +30,15 @@ class Product extends Model
         return [
             'unit_type' => UnitType::class,
         ];
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (! $this->image) {
+            return null;
+        }
+
+        return asset('storage/' . ltrim($this->image, '/'));
     }
 
     public function batches(): HasMany

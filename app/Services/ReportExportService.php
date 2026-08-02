@@ -6,7 +6,6 @@ use App\Enums\CustomerType;
 use App\Enums\PaymentMethod;
 use App\Enums\SalesChannel;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -170,12 +169,12 @@ class ReportExportService
         };
     }
 
-    public function export(string $report, string $format, ?Carbon $from = null, ?Carbon $to = null): StreamedResponse|Response
+    public function export(string $report, string $format, ?Carbon $from = null, ?Carbon $to = null): StreamedResponse
     {
         $from ??= now()->subDays(30);
         $to ??= now();
 
-        $payload = $this->build($report, $from, $to);
+        $payload = $this->sanitizePayload($this->build($report, $from, $to));
         $filename = $report . '_' . $from->format('Ymd') . '_' . $to->format('Ymd');
 
         return $format === 'pdf'
@@ -183,21 +182,45 @@ class ReportExportService
             : $this->toCsv($payload, $filename);
     }
 
+    /**
+     * @param  array{title: string, headers: list<string>, rows: list<list<mixed>>}  $payload
+     * @return array{title: string, headers: list<string>, rows: list<list<mixed>>}
+     */
+    private function sanitizePayload(array $payload): array
+    {
+        $payload['title'] = $this->utf8($payload['title']);
+        $payload['headers'] = array_map(fn ($h) => $this->utf8((string) $h), $payload['headers']);
+        $payload['rows'] = array_map(
+            fn (array $row) => array_map(fn ($cell) => $this->utf8(is_scalar($cell) || $cell === null ? (string) ($cell ?? '') : json_encode($cell)), $row),
+            $payload['rows']
+        );
+
+        return $payload;
+    }
+
+    private function utf8(string $value): string
+    {
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+
+        return $clean === false ? '' : $clean;
+    }
+
     private function toCsv(array $payload, string $filename): StreamedResponse
     {
         return response()->streamDownload(function () use ($payload) {
             $out = fopen('php://output', 'w');
+            fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
             fputcsv($out, $payload['headers']);
             foreach ($payload['rows'] as $row) {
                 fputcsv($out, $row);
             }
             fclose($out);
         }, $filename . '.csv', [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
-    private function toPdf(array $payload, string $filename, Carbon $from, Carbon $to): Response
+    private function toPdf(array $payload, string $filename, Carbon $from, Carbon $to): StreamedResponse
     {
         $pdf = Pdf::loadView('reports.export', [
             'title'   => $payload['title'],
@@ -205,8 +228,14 @@ class ReportExportService
             'rows'    => $payload['rows'],
             'from'    => $from,
             'to'      => $to,
-        ]);
+        ])->setPaper('a4', 'portrait');
 
-        return $pdf->download($filename . '.pdf');
+        return response()->streamDownload(
+            function () use ($pdf) {
+                echo $pdf->output();
+            },
+            $filename . '.pdf',
+            ['Content-Type' => 'application/pdf']
+        );
     }
 }

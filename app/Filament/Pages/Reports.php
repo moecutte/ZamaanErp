@@ -9,9 +9,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Illuminate\Http\Response;
+use Filament\Notifications\Notification;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -179,7 +178,7 @@ class Reports extends Page implements HasForms
         }
     }
 
-    public function export(): StreamedResponse|Response|null
+    public function export(): ?StreamedResponse
     {
         $data = $this->form->getState();
 

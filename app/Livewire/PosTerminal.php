@@ -125,6 +125,7 @@ class PosTerminal extends Component
                     'sku' => $product->sku,
                     'form' => $form->name,
                     'category' => $product->category,
+                    'image_url' => $product->image_url,
                     'unit' => $product->unit_type?->label() ?? '',
                     'available' => $available,
                     'price' => $price,
