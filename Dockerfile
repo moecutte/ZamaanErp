@@ -67,8 +67,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/php.ini /usr/local/etc/php/conf.d/99-laravel.ini
 COPY docker/nginx.conf /etc/nginx/sites-available/default
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# 1. Copies the file from your project
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
+# 2. ADD THIS LINE: Strips out hidden Windows carriage returns (\r)
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh
+
+# 3. Grants execution permissions (Modified to include the fix)
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log \
