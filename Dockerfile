@@ -1,5 +1,34 @@
+# ---- PHP base with extensions (before Composer) ----
+FROM php:8.3-fpm-bookworm AS php-base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+        unzip \
+        libpng-dev \
+        libjpeg62-turbo-dev \
+        libfreetype6-dev \
+        libzip-dev \
+        libicu-dev \
+        libonig-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_mysql \
+        mbstring \
+        exif \
+        pcntl \
+        bcmath \
+        gd \
+        zip \
+        intl \
+        opcache \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 # ---- Composer dependencies ----
-FROM composer:2 AS vendor
+FROM php-base AS vendor
 
 WORKDIR /app
 
@@ -27,31 +56,11 @@ COPY --from=vendor /app/vendor ./vendor
 RUN npm run build
 
 # ---- Production runtime ----
-FROM php:8.3-fpm-bookworm
+FROM php-base AS production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
-        curl \
-        git \
-        unzip \
-        libpng-dev \
-        libjpeg62-turbo-dev \
-        libfreetype6-dev \
-        libzip-dev \
-        libicu-dev \
-        libonig-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_mysql \
-        mbstring \
-        exif \
-        pcntl \
-        bcmath \
-        gd \
-        zip \
-        intl \
-        opcache \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
